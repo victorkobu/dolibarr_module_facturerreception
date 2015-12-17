@@ -105,7 +105,7 @@ class ActionsfacturerReception
 		{
 			while ($obj = $db->fetch_object($resql))
 			{
-				$products_dispatched[$obj->fk_product] = $obj;
+				$products_dispatched[$obj->fk_product] += $obj->qty;
 			}
 		}
 		
@@ -144,11 +144,11 @@ class ActionsfacturerReception
 
 	}
 
-	function _calcTotaux(&$object, &$TValue, &$line_dispatched, &$total_ht, &$total_tva, &$total_ttc, &$total_localtax1, &$total_localtax2, $debug)
+	function _calcTotaux(&$object, &$TValue, &$qty_dispatched, &$total_ht, &$total_tva, &$total_ttc, &$total_localtax1, &$total_localtax2, $debug)
 	{
-		if ($debug) print 'fk_product = '.$TValue->fk_product.' :: qty cmd = '.$TValue->qty.' :: qty ventilés = '.$line_dispatched->qty.'<br />';
+		if ($debug) print 'fk_product = '.$TValue->fk_product.' :: qty cmd = '.$TValue->qty.' :: qty ventilés = '.$line_dispatched.'<br />';
 		
-		$TValue->qty = $line_dispatched->qty; // Ceci est important de le faire, j'update la qty de la ligne courante qui sera repris sur l'affichage de Dolibarr
+		$TValue->qty = $qty_dispatched; // Ceci est important de le faire, j'update la qty de la ligne courante qui sera repris sur l'affichage de Dolibarr
 		$tabprice = calcul_price_total($TValue->qty, $TValue->subprice, $TValue->remise_percent, $TValue->tva_tx, $TValue->localtax1_tx, $TValue->localtax2_tx, 0, 'HT', $TValue->info_bits, $TValue->product_type, $object->thirdparty);
 		
         $total_ht  += $tabprice[0];

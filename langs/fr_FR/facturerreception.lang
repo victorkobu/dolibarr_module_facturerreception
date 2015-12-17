@@ -6,5 +6,5 @@ ATMAbout = Ce module a été développé par <a href="http://www.atm-consulting.
 facturerReceptionSetup = Configuration du module Facturer Récéption
 facturerReceptionAbout = A propos du module Facturer Récéption
 
-facturerReceptionAllowFreeLineService=Autoriser les lignes libres de type "Service"
-facturerReceptionAllowFreeLineProduct=Autoriser les lignes libres de type "Produit"
+facturerReceptionAllowFreeLineService=Autoriser la récupération des lignes libres de type "Service"
+facturerReceptionAllowFreeLineProduct=Autoriser la récupération des lignes libres de type "Produit"
