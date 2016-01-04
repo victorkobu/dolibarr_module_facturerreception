@@ -89,6 +89,7 @@ class modfacturerReception extends DolibarrModules
 		//                        );
 		$this->module_parts = array(
 			'hooks'=>array('ordersuppliercard', 'invoicesuppliercard')
+			,'triggers' => 1
 		);
 
 		// Data directories to create when module is enabled.

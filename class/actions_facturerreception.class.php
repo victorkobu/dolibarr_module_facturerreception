@@ -76,59 +76,51 @@ class ActionsfacturerReception
 			}
 		}
 	}
+	
+	function formObjectOptions($parameters, &$object, &$action, $hookmanager)
+	{
+		$onreception = GETPOST('onreception', 'int');
+		if (!empty($onreception)) echo '<input type="hidden" name="onreception" value="1" />';
+	}
 
 	function fetchOriginFourn($parameters, &$object, &$action, $hookmanager)
 	{
 		global $db,$conf;
 		
 		$debug = isset($_REQUEST['DEBUG']) ? true : false;
+		$onreception = GETPOST('onreception', 'int');
 		
-		if ($object->element !== 'order_supplier') return 0;
+		if ($object->element !== 'order_supplier' || empty($onreception) || $onreception <= 0) return 0;
 		
-		$products_dispatched = array();
+		dol_include_once('/facturerreception/lib/facturerreception.lib.php');
 		
-		// List of already dispatching
-		$sql = "SELECT p.ref, p.label,";
-		$sql.= " e.rowid as warehouse_id, e.label as entrepot,";
-		$sql.= " cfd.fk_product, cfd.qty, cfd.rowid";
-		$sql.= " FROM ".MAIN_DB_PREFIX."product as p,";
-		$sql.= " ".MAIN_DB_PREFIX."commande_fournisseur_dispatch as cfd";
-		$sql.= " LEFT JOIN ".MAIN_DB_PREFIX."entrepot as e ON cfd.fk_entrepot = e.rowid";
-		$sql.= " WHERE cfd.fk_commande = ".$object->id;
-		$sql.= " AND cfd.fk_product = p.rowid";
-		$sql.= " ORDER BY cfd.rowid ASC";
-
-		if ($debug) print 'Requête SQL pour récup les qty ventilées => '.$sql.'<br />';
-
-		$resql = $db->query($sql);
-		if ($resql)
-		{
-			while ($obj = $db->fetch_object($resql))
-			{
-				$products_dispatched[$obj->fk_product] += $obj->qty;
-			}
-		}
+		$products_dispatched = _getProductDispatched($db, $object, $debug);
 		
 		if ($debug) { print 'count + var_dump de $product_dispatched = '.count($products_dispatched).'<br />'; var_dump($products_dispatched); }
 		
-		$total_ht = $total_tva = $total_ttc = $total_localtax1 = $total_localtax2 = 0;
 		if (count($products_dispatched) > 0)
 		{
 			dol_include_once('/core/lib/price.lib.php');
-			
+			$total_ht = $total_tva = $total_ttc = $total_localtax1 = $total_localtax2 = 0;
 			if ($debug) print "total_ht = $total_ht, total_tva = $total_tva, total_ttc = $total_ttc, total_localtax1 = $total_localtax1, total_localtax2 = $total_localtax2<br />";
 			
-			foreach ($object->lines as $key => &$TValue)
+			foreach ($object->lines as $key => &$line)
 			{
-				if (isset($products_dispatched[$TValue->fk_product]))
+				if (isset($products_dispatched[$line->fk_product]))
 				{
-					$this->_calcTotaux($object, $TValue, $products_dispatched[$TValue->fk_product], $total_ht, $total_tva, $total_ttc, $total_localtax1, $total_localtax2, $debug);
+					foreach ($products_dispatched[$line->fk_product] as $fk_commandefourndet => $qty_dispatched)
+					{
+						if ($line->id == $fk_commandefourndet) _calcTotaux($object, $line, $qty_dispatched, $total_ht, $total_tva, $total_ttc, $total_localtax1, $total_localtax2, $debug);
+					}
+					
 				}
 				else
 				{
 					//Accepte les lignes libres ou non
-					if (empty($TValue->fk_product) && $conf->global->FACTURERRECEPTION_ALLOW_FREE_LINE_SERVICE && $TValue->product_type == 1) $this->_calcTotaux($object, $TValue, $total_ht, $total_tva, $total_ttc, $total_localtax1, $total_localtax2, $debug);
-					elseif (empty($TValue->fk_product) && $conf->global->FACTURERRECEPTION_ALLOW_FREE_LINE_PRODUCT && $TValue->product_type == 0) $this->_calcTotaux($object, $TValue, $total_ht, $total_tva, $total_ttc, $total_localtax1, $total_localtax2, $debug);
+					if (	
+						(empty($line->fk_product) && $conf->global->FACTURERRECEPTION_ALLOW_FREE_LINE_SERVICE && $line->product_type == 1) ||
+						(empty($line->fk_product) && $conf->global->FACTURERRECEPTION_ALLOW_FREE_LINE_PRODUCT && $line->product_type == 0)
+					) _calcTotaux($object, $line, $total_ht, $total_tva, $total_ttc, $total_localtax1, $total_localtax2, $debug);
 					else unset($object->lines[$key]);
 				}
 			}
@@ -141,21 +133,19 @@ class ActionsfacturerReception
 			$object->total_localtax1 = $total_localtax1;
 			$object->total_localtax2 = $total_localtax2;
 		}
+		else
+		{
+			foreach ($object->lines as $key => &$line) unset($object->lines[$key]);
+			
+			$object->total_ht = 0;
+			$object->total_tva = 0;
+			$object->total_ttc = 0;
+			$object->total_localtax1 = 0;
+			$object->total_localtax2 = 0;
+		}
 
 	}
 
-	function _calcTotaux(&$object, &$TValue, &$qty_dispatched, &$total_ht, &$total_tva, &$total_ttc, &$total_localtax1, &$total_localtax2, $debug)
-	{
-		if ($debug) print 'fk_product = '.$TValue->fk_product.' :: qty cmd = '.$TValue->qty.' :: qty ventilés = '.$line_dispatched.'<br />';
-		
-		$TValue->qty = $qty_dispatched; // Ceci est important de le faire, j'update la qty de la ligne courante qui sera repris sur l'affichage de Dolibarr
-		$tabprice = calcul_price_total($TValue->qty, $TValue->subprice, $TValue->remise_percent, $TValue->tva_tx, $TValue->localtax1_tx, $TValue->localtax2_tx, 0, 'HT', $TValue->info_bits, $TValue->product_type, $object->thirdparty);
-		
-        $total_ht  += $tabprice[0];
-        $total_tva += $tabprice[1];
-        $total_ttc += $tabprice[2];
-        $total_localtax1 += $tabprice[9];
-        $total_localtax2 += $tabprice[10];
-	}
+	
 	
 }

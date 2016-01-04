@@ -53,3 +53,43 @@ function facturerreceptionAdminPrepareHead()
 
     return $head;
 }
+
+function _getProductDispatched(&$db, &$object, $debug)
+{
+	// List of already dispatching
+	$sql = "SELECT cfd.fk_product, SUM(cfd.qty) as qty, cfd.fk_commandefourndet";
+	$sql.= " FROM ".MAIN_DB_PREFIX."product as p,";
+	$sql.= " ".MAIN_DB_PREFIX."commande_fournisseur_dispatch as cfd";
+	$sql.= " LEFT JOIN ".MAIN_DB_PREFIX."entrepot as e ON cfd.fk_entrepot = e.rowid";
+	$sql.= " WHERE cfd.fk_commande = ".$object->id;
+	$sql.= " AND cfd.fk_product = p.rowid GROUP BY cfd.fk_commandefourndet";
+	$sql.= " ORDER BY cfd.rowid ASC";
+
+	if ($debug) print 'Requête SQL pour récup les qty ventilées => '.$sql.'<br />';
+
+	$resql = $db->query($sql);
+	if ($resql)
+	{
+		while ($obj = $db->fetch_object($resql))
+		{
+			$products_dispatched[$obj->fk_product][$obj->fk_commandefourndet] += $obj->qty;
+		}
+	}
+	
+	return $products_dispatched;
+}
+
+function _calcTotaux(&$object, &$line, &$qty_dispatched, &$total_ht, &$total_tva, &$total_ttc, &$total_localtax1, &$total_localtax2, $debug)
+{
+	if ($debug) print 'fk_product = '.$line->fk_product.' :: qty cmd = '.$line->qty.' :: qty ventilés = '.$qty_dispatched.'<br />';
+	
+	$line->qty = $qty_dispatched; // Ceci est important de le faire, j'update la qty de la ligne courante qui sera repris sur l'affichage de Dolibarr
+	$tabprice = calcul_price_total($line->qty, $line->subprice, $line->remise_percent, $line->tva_tx, $line->localtax1_tx, $line->localtax2_tx, 0, 'HT', $line->info_bits, $line->product_type, $object->thirdparty, array());
+	
+    $total_ht  += $tabprice[0];
+    $total_tva += $tabprice[1];
+    $total_ttc += $tabprice[2];
+    $total_localtax1 += $tabprice[9];
+    $total_localtax2 += $tabprice[10];
+}
+
