@@ -61,91 +61,169 @@ class ActionsfacturerReception
 	 */
 	function doActions($parameters, &$object, &$action, $hookmanager)
 	{
+		global $user,$conf,$langs,$db;
+		
+		if ($parameters['currentcontext'] == 'ordersuppliercard' && ! empty($conf->fournisseur->enabled) && $object->statut >= 2 && $action=='billedreception')  // 2 means accepted
+		{
+			if ($user->rights->fournisseur->facture->creer)
+			{
+				
+				$datereception = GETPOST('datereception');
+				
+				if(!empty($datereception)) {
+					$resultset = $db->query("SELECT fk_commandefourndet,fk_product,SUM(qty) as qty
+					FROM ".MAIN_DB_PREFIX."commande_fournisseur_dispatch 
+					WHERE fk_commande=".$object->id."
+					AND tms LIKE '".date('Y-m-d H', strtotime($datereception))."%'
+					GROUP BY fk_commandefourndet,fk_product
+					"
+					);
+					
+					$Tab = array();
+					while($obj = $db->fetch_object($resultset)) {
+						$obj->line = $this->getGoodLine($object, $obj->fk_commandefourndet, $obj->fk_product);
+						
+						$Tab[] = $obj;
+					}
+				
+					$this->createFacture($object,$Tab);
+					
+				}
+				
+				
+			}
+			
+		}
+	}
+
+	function createFacture(&$object, &$TLine) {
+		global $user,$conf,$langs,$db;
+		
+		dol_include_once('/fourn/class/fournisseur.facture.class.php');
+			
+		$facture = new FactureFournisseur($db);	
+		
+		$facture->origin = $object->element;
+		$facture->origin_id = $object->id;
+		
+		$facture->ref           = '';
+		$facture->ref_supplier = '';
+		//$facture->ref_supplier  = $object->ref_supplier;
+        $facture->socid         = $object->socid;
+		$facture->libelle         = $object->libelle;
+        
+        $object->date          = time();
+        
+        $facture->note_public   = $object->note_public;
+        $facture->note_private   = $object->note_private;
+        $facture->cond_reglement_id   = $object->cond_reglement_id;
+        $facture->fk_account   = $object->fk_account;
+        $facture->fk_project   = $object->fk_project;
+        $facture->fk_incoterms   = $object->fk_incoterms;
+        $facture->location_incoterms   = $object->location_incoterms;
+		        
+		$facture->date_echeance = $facture->calculate_date_lim_reglement();
+		
+		foreach($TLine as &$row) {
+			
+			$line = $row->line;
+			$line->qty = $row->qty;
+			$line->id= 0;
+			
+			$facture->lines[] = $line;
+			
+			
+		}
+		
+		$res = $facture->create($user);
+		
+		if($res>0) {
+		
+			header('location:'.dol_buildpath('/fourn/facture/card.php?facid='.$res,1));
+		
+			exit;
+			
+		}
+		else {
+			
+			setEventMessage("ImpossibleToCreateInvoice","errors");	
+		}
+		
+		
+	}
+
+	function getGoodLine(&$object, $fk_commandefourndet, $fk_product) {
+		
+		if(!empty($object->lines)) {
+			
+			foreach($object->lines as &$line) {
+				
+				if($fk_commandefourndet>0 && $line->id == $fk_commandefourndet) return $line;
+				
+				if($fk_commandefourndet==0 && $line->fk_product == $fk_product) return $line;
+				
+			}
+			
+		}
+
 		
 	}
 
 	function addMoreActionsButtons($parameters, &$object, &$action, $hookmanager)
 	{
-		global $user,$conf;
+		global $user,$conf,$langs,$db;
 		
-		if (! empty($conf->fournisseur->enabled) && $object->statut >= 2)  // 2 means accepted
+		if ($parameters['currentcontext'] == 'ordersuppliercard' && ! empty($conf->fournisseur->enabled) && $object->statut >= 2)  // 2 means accepted
 		{
 			if ($user->rights->fournisseur->facture->creer)
 			{
-				echo '<div class="tabsAction"><a class="butAction" href="'.dol_buildpath('/fourn/facture/card.php?action=create&onreception=1&origin='.$object->element.'&originid='.$object->id.'&socid='.$object->socid, 1).'" >Facturer la réception de stock</a></div>';
+				$langs->load('facturerreception@facturerreception');
+				
+				$resultset = $db->query("SELECT DATE_FORMAT(tms,'%Y-%m-%d %H:00:00') as 'date', tms as 'datem', SUM(qty) as 'nb'
+				FROM ".MAIN_DB_PREFIX."commande_fournisseur_dispatch 
+				WHERE fk_commande=".$object->id
+				." GROUP BY date ");
+				
+				$Tab = array();
+				while($obj = $db->fetch_object($resultset)) {
+					$Tab[$obj->date] = dol_print_date(strtotime($obj->datem), 'dayhour');
+				}
+				
+				if(empty($Tab)) return 0;
+				
+				echo '<form name="facturerreception" action="?id=&action=billedreception">';
+				echo '<input type="hidden" name="id" value="'.$object->id.'" />';
+				echo '<input type="hidden" name="action" value="billedreception" />';
+				echo '<select name="datereception" >';
+					echo '<option value=""> </option>';
+				
+				foreach ($Tab as $k=>$v) {
+					
+					echo '<option value="'.$k.'">'.$v.'</option>';
+					
+				}
+				echo '</select>';
+				
+				echo '<input type="submit" class="butAction" value="'.$langs->trans('BillRecep').'" />';
+				
+				echo '</form>';
+				
+				?>
+				<script type="text/javascript">
+				
+					$(document).ready(function() {
+					
+						$("form[name=facturerreception]").appendTo("div.tabsAction");
+							
+					});
+					
+				</script>
+				<?php
+				
 			}
 		}
 	}
 	
-	function formObjectOptions($parameters, &$object, &$action, $hookmanager)
-	{
-		$onreception = GETPOST('onreception', 'int');
-		if (!empty($onreception)) echo '<input type="hidden" name="onreception" value="1" />';
-	}
-
-	function fetchOriginFourn($parameters, &$object, &$action, $hookmanager)
-	{
-		global $db,$conf;
-		
-		$debug = isset($_REQUEST['DEBUG']) ? true : false;
-		$onreception = GETPOST('onreception', 'int');
-		
-		if ($object->element !== 'order_supplier' || empty($onreception) || $onreception <= 0) return 0;
-		
-		dol_include_once('/facturerreception/lib/facturerreception.lib.php');
-		
-		$products_dispatched = _getProductDispatched($db, $object, $debug);
-		
-		if ($debug) { print 'count + var_dump de $product_dispatched = '.count($products_dispatched).'<br />'; var_dump($products_dispatched); }
-		
-		if (count($products_dispatched) > 0)
-		{
-			dol_include_once('/core/lib/price.lib.php');
-			$total_ht = $total_tva = $total_ttc = $total_localtax1 = $total_localtax2 = 0;
-			if ($debug) print "total_ht = $total_ht, total_tva = $total_tva, total_ttc = $total_ttc, total_localtax1 = $total_localtax1, total_localtax2 = $total_localtax2<br />";
-			
-			foreach ($object->lines as $key => &$line)
-			{
-				if (isset($products_dispatched[$line->fk_product]))
-				{
-					foreach ($products_dispatched[$line->fk_product] as $fk_commandefourndet => $qty_dispatched)
-					{
-						if ($line->id == $fk_commandefourndet) _calcTotaux($object, $line, $qty_dispatched, $total_ht, $total_tva, $total_ttc, $total_localtax1, $total_localtax2, $debug);
-					}
-					
-				}
-				else
-				{
-					//Accepte les lignes libres ou non
-					if (	
-						(empty($line->fk_product) && $conf->global->FACTURERRECEPTION_ALLOW_FREE_LINE_SERVICE && $line->product_type == 1) ||
-						(empty($line->fk_product) && $conf->global->FACTURERRECEPTION_ALLOW_FREE_LINE_PRODUCT && $line->product_type == 0)
-					) _calcTotaux($object, $line, $total_ht, $total_tva, $total_ttc, $total_localtax1, $total_localtax2, $debug);
-					else unset($object->lines[$key]);
-				}
-			}
-			
-			if ($debug) print "total_ht = $total_ht, total_tva = $total_tva, total_ttc = $total_ttc, total_localtax1 = $total_localtax1, total_localtax2 = $total_localtax2<br />";
-			
-			$object->total_ht = $total_ht;
-			$object->total_tva = $total_tva;
-			$object->total_ttc = $total_ttc;
-			$object->total_localtax1 = $total_localtax1;
-			$object->total_localtax2 = $total_localtax2;
-		}
-		else
-		{
-			foreach ($object->lines as $key => &$line) unset($object->lines[$key]);
-			
-			$object->total_ht = 0;
-			$object->total_tva = 0;
-			$object->total_ttc = 0;
-			$object->total_localtax1 = 0;
-			$object->total_localtax2 = 0;
-		}
-
-	}
-
 	
 	
 }
