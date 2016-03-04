@@ -74,7 +74,7 @@ class ActionsfacturerReception
 					$resultset = $db->query("SELECT fk_commandefourndet,fk_product,SUM(qty) as qty
 					FROM ".MAIN_DB_PREFIX."commande_fournisseur_dispatch 
 					WHERE fk_commande=".$object->id."
-					AND tms LIKE '".date('Y-m-d H', strtotime($datereception))."%'
+					AND datec LIKE '".date('Y-m-d H', strtotime($datereception))."%'
 					GROUP BY fk_commandefourndet,fk_product
 					"
 					);
@@ -121,7 +121,7 @@ class ActionsfacturerReception
         $facture->fk_project   = $object->fk_project;
         $facture->fk_incoterms   = $object->fk_incoterms;
         $facture->location_incoterms   = $object->location_incoterms;
-		        
+		        $facture->ref_supplier = time();
 		$facture->date_echeance = $facture->calculate_date_lim_reglement();
 		
 		foreach($TLine as &$row) {
@@ -138,8 +138,8 @@ class ActionsfacturerReception
 		$res = $facture->create($user);
 		
 		if($res>0) {
-		
-			header('location:'.dol_buildpath('/fourn/facture/card.php?facid='.$res,1));
+
+			header('location:'.dol_buildpath('/fourn/facture/card.php?action=editref_supplier&id='.$res,1));
 		
 			exit;
 			
@@ -179,11 +179,11 @@ class ActionsfacturerReception
 			{
 				$langs->load('facturerreception@facturerreception');
 				
-				$resultset = $db->query("SELECT DATE_FORMAT(tms,'%Y-%m-%d %H:00:00') as 'date', tms as 'datem', SUM(qty) as 'nb'
+				$resultset = $db->query("SELECT DATE_FORMAT(datec,'%Y-%m-%d %H:00:00') as 'date', datec as 'datem', SUM(qty) as 'nb'
 				FROM ".MAIN_DB_PREFIX."commande_fournisseur_dispatch 
 				WHERE fk_commande=".$object->id
 				." GROUP BY date ");
-				
+
 				$Tab = array();
 				while($obj = $db->fetch_object($resultset)) {
 					$Tab[$obj->date] = dol_print_date(strtotime($obj->datem), 'dayhour');
@@ -191,7 +191,7 @@ class ActionsfacturerReception
 				
 				if(empty($Tab)) return 0;
 				
-				echo '<form name="facturerreception" action="?id=&action=billedreception">';
+				echo '<form name="facturerreception" action="?id=&action=billedreception" style="display:inline;">';
 				echo '<input type="hidden" name="id" value="'.$object->id.'" />';
 				echo '<input type="hidden" name="action" value="billedreception" />';
 				echo '<select name="datereception" >';
