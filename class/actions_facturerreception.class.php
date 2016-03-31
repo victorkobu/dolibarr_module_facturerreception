@@ -118,10 +118,10 @@ class ActionsfacturerReception
         $facture->note_private   = $object->note_private;
         $facture->cond_reglement_id   = $object->cond_reglement_id;
         $facture->fk_account   = $object->fk_account;
-        $facture->fk_project   = $object->fk_project;
+        $facture->fk_project   = empty($object->fk_project) ? null : $object->fk_project;
         $facture->fk_incoterms   = $object->fk_incoterms;
         $facture->location_incoterms   = $object->location_incoterms;
-		        $facture->ref_supplier = time();
+		$facture->ref_supplier = time();
 		$facture->date_echeance = $facture->calculate_date_lim_reglement();
 		
 		foreach($TLine as &$row) {
@@ -145,7 +145,7 @@ class ActionsfacturerReception
 			
 		}
 		else {
-			
+			//var_dump($res, $facture);
 			setEventMessage("ImpossibleToCreateInvoice","errors");	
 		}
 		
