@@ -74,7 +74,7 @@ class ActionsfacturerReception
 					$resultset = $db->query("SELECT fk_commandefourndet,fk_product,SUM(qty) as qty
 					FROM ".MAIN_DB_PREFIX."commande_fournisseur_dispatch 
 					WHERE fk_commande=".$object->id."
-					AND datec '".date('Y-m-d H:i:s', strtotime($datereception))."'
+					AND datec LIKE '".date('Y-m-d H:i:s', strtotime($datereception))."%'
 					GROUP BY fk_commandefourndet,fk_product
 					"
 					);
