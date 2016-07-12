@@ -179,10 +179,10 @@ class ActionsfacturerReception
 			{
 				$langs->load('facturerreception@facturerreception');
 				
-				$resultset = $db->query("SELECT DATE_FORMAT(datec,'%Y-%m-%d %H:00:00') as 'date', datec as 'datem', SUM(qty) as 'nb'
+				$resultset = $db->query("SELECT DATE_FORMAT(datec,'%Y-%m-%d %H:%i:%s') as 'date', datec as 'datem', SUM(qty) as 'nb'
 				FROM ".MAIN_DB_PREFIX."commande_fournisseur_dispatch 
 				WHERE fk_commande=".$object->id
-				." GROUP BY date ");
+				." GROUP BY rowid ");
 
 				$Tab = array();
 				while($obj = $db->fetch_object($resultset)) {
